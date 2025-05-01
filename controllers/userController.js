@@ -1,8 +1,69 @@
+/**
+ * @file userController.js
+ * @description Controlador para manejar las operaciones relacionadas con el usuario:
+ * registro de nuevo usuario y obtención de datos por email (desde token JWT).
+ *
+ * @module controllers/userController
+ */
+
 const { client } = require("../db");
+const { createUser, saveUserToDatabase } = require("../supabase");
 
 /**
- * Controlador para obtener información del usuario autenticado por email.
- * Utiliza el email decodificado del token JWT.
+ * Registra un nuevo usuario.
+ * Verifica si el correo ya existe, crea al usuario en Supabase y lo guarda en la BD.
+ */
+async function handleRegister(req, res) {
+  const { username, nombre_completo, email, password } = req.body;
+
+  if (!username || !nombre_completo || !email || !password)
+    return res.status(400).json({ success: false, message: "Faltan datos" });
+
+  try {
+    const emailExist = await client.query(
+      "SELECT * FROM Usuario WHERE email_usuario = $1",
+      [email]
+    );
+
+    if (emailExist.rows.length > 0)
+      return res
+        .status(400)
+        .json({ success: false, message: "El email ya está registrado" });
+
+    const supabaseResult = await createUser(
+      email,
+      password,
+      username,
+      nombre_completo
+    );
+
+    if (!supabaseResult.success)
+      return res
+        .status(400)
+        .json({ success: false, message: supabaseResult.message });
+
+    const dbResult = await saveUserToDatabase(
+      email,
+      username,
+      nombre_completo,
+      password
+    );
+
+    if (!dbResult.success)
+      return res.status(500).json({
+        success: false,
+        message: "Error al guardar en la base de datos",
+      });
+
+    res.json({ success: true, message: "Usuario registrado exitosamente." });
+  } catch (error) {
+    console.error("Error en register:", error.message);
+    res.status(500).json({ success: false, message: "Error interno" });
+  }
+}
+
+/**
+ * Devuelve datos del usuario autenticado usando su email del token JWT.
  */
 async function getUserByEmail(req, res) {
   const { email } = req.user;
@@ -37,4 +98,7 @@ async function getUserByEmail(req, res) {
   }
 }
 
-module.exports = { getUserByEmail };
+module.exports = {
+  handleRegister,
+  getUserByEmail,
+};
