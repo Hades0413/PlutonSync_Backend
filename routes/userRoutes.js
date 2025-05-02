@@ -10,6 +10,7 @@ const express = require("express");
 const {
   handleRegister,
   getUserByEmail,
+  getUserById,
 } = require("../controllers/userController");
 const { authMiddleware } = require("../middlewares/authMiddleware");
 
@@ -23,10 +24,17 @@ const router = express.Router();
 router.post("/register", handleRegister);
 
 /**
+ * @route GET /listar-id
+ * @description Devuelve los datos del usuario autenticado usando su id_usuario (desde JWT).
+ * @access Private
+ */
+router.get("/listar-id", authMiddleware, getUserById); // Nueva ruta para obtener datos por id
+
+/**
  * @route GET /listar-email
  * @description Devuelve los datos del usuario autenticado usando su email (desde JWT).
  * @access Private
  */
-router.get("/listar-email", authMiddleware, getUserByEmail);
+router.get("/listar-id/:id", authMiddleware, getUserByEmail);
 
 module.exports = router;
