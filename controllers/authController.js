@@ -14,16 +14,14 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRATION = "1h";
 
 // Función para validar el formato del correo y la longitud de la contraseña
-function validarEntradas(email, password) {
+function validarEntradas(email_usuario, password_usuario) {
   const errores = [];
 
-  // Validación de correo electrónico
-  if (!email || !validator.isEmail(email)) {
+  if (!email_usuario || !validator.isEmail(email_usuario)) {
     errores.push("Correo electrónico inválido");
   }
 
-  // Validación de contraseña
-  if (!password || password.length < 12) {
+  if (!password_usuario || password_usuario.length < 12) {
     errores.push("La contraseña debe tener al menos 12 caracteres");
   }
 
@@ -31,10 +29,9 @@ function validarEntradas(email, password) {
 }
 
 async function handleLogin(req, res) {
-  const { email, password } = req.body;
+  const { email_usuario, password_usuario } = req.body;
 
-  // Validar entradas
-  const errores = validarEntradas(email, password);
+  const errores = validarEntradas(email_usuario, password_usuario);
   if (errores.length > 0) {
     return res
       .status(400)
@@ -44,7 +41,7 @@ async function handleLogin(req, res) {
   try {
     const result = await client.query(
       "SELECT * FROM Usuario WHERE email_usuario = $1",
-      [email]
+      [email_usuario]
     );
 
     if (result.rows.length === 0) {
@@ -54,7 +51,10 @@ async function handleLogin(req, res) {
     }
 
     const user = result.rows[0];
-    const isMatch = await bcrypt.compare(password, user.password_usuario);
+    const isMatch = await bcrypt.compare(
+      password_usuario,
+      user.password_usuario
+    );
 
     if (!isMatch) {
       return res
@@ -70,23 +70,17 @@ async function handleLogin(req, res) {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // solo en producción
+      secure: process.env.NODE_ENV === "production",
       sameSite: "Strict",
-      maxAge: 3600000, // 1 hora
+      maxAge: 3600000,
     });
 
-    res.json({
-      success: true,
-      user: {
-        id: user.id_usuario,
-        nombre: user.nombre_completo_usuario,
-        email: user.email_usuario,
-      },
+    res.status(201).json({
+      code: 201,
       message: "Login exitoso",
     });
   } catch (error) {
     console.error("Error en login:", error.message);
-    // Evitar exponer detalles del error en producción
     const mensajeError =
       process.env.NODE_ENV === "production" ? "Error interno" : error.message;
 
@@ -96,17 +90,27 @@ async function handleLogin(req, res) {
 
 function handleLogout(req, res) {
   try {
-    res.clearCookie("token", {
+    // Invalida la cookie del token estableciendo una expiración en el pasado
+    res.cookie("token", "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "Strict",
+      expires: new Date(0), // Fuerza expiración inmediata
     });
 
+    // Limpia el storage del navegador
     res.setHeader("Clear-Site-Data", '"cookies", "storage", "cache"');
-    res.json({ success: true, message: "Sesión cerrada correctamente" });
+
+    res.status(200).json({
+      success: true,
+      message: "Sesión cerrada correctamente",
+    });
   } catch (error) {
     console.error("Error al cerrar sesión:", error.message);
-    res.status(500).json({ success: false, message: "Error al cerrar sesión" });
+    res.status(500).json({
+      success: false,
+      message: "Error al cerrar sesión",
+    });
   }
 }
 
