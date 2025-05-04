@@ -1,77 +1,106 @@
-// Carga las variables de entorno desde un archivo .env en el proyecto
+// Cargar variables de entorno desde .env
 require("dotenv").config();
 
-// Importación de dependencias principales
+// Dependencias principales
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 
-// Importación de archivos internos
-const { conectarBaseDeDatos } = require("./db"); // Función para conectar a la base de datos
-const authRoutes = require("./routes/authRoutes"); // Rutas relacionadas a autenticación
-const userRoutes = require("./routes/userRoutes"); // Rutas relacionadas a gestión de usuarios
+// Archivos internos
+const { conectarBaseDeDatos } = require("./db");
+const authRoutes = require("./routes/authRoutes");
+const userRoutes = require("./routes/userRoutes");
 
-// Inicialización de la aplicación Express
 const app = express();
-
-// Puerto de escucha, configurable por variable de entorno
 const PORT = process.env.PORT || 3000;
 
 /**
- * 🛡️ Middleware de seguridad y configuración
+ * 🛡️ Seguridad y configuración de middleware
  */
+app.disable("x-powered-by"); // Elimina el header X-Powered-By
+app.use(helmet()); // Cabeceras de seguridad por defecto
 
-// Configuración de CORS para permitir el acceso desde el frontend
-// con envío de cookies entre dominios
+// Política de seguridad de contenido (CSP)
 app.use(
-  cors({
-    origin: process.env.ORIGIN, // Debe coincidir con el dominio del frontend
-    credentials: true, // Permite el uso de cookies en peticiones cross-origin
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://trusted.cdn.com"],
+      styleSrc: ["'self'", "https://trusted.cdn.com"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'"],
+      fontSrc: [
+        "'self'",
+        "https://fonts.googleapis.com",
+        "https://fonts.gstatic.com",
+      ],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'self'"],
+      upgradeInsecureRequests: [],
+    },
   })
 );
 
-// Middleware para parsear el cuerpo de las solicitudes en formato JSON
-app.use(express.json());
+// Cabeceras adicionales
+app.use((req, res, next) => {
+  res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 
-// Middleware para parsear cookies en las solicitudes
+// Limitador de tasa
+/*
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100, // máximo de 100 peticiones por IP
+    message: "Demasiadas solicitudes, intenta más tarde.",
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
+*/
+
+// CORS con envío de cookies
+app.use(
+  cors({
+    origin: process.env.ORIGIN || "http://localhost:5173",
+    credentials: true,
+  })
+);
+
+// Parseadores de cuerpo y cookies
+app.use(express.json({ limit: "10kb" }));
 app.use(cookieParser());
 
 /**
- * 🔀 Rutas de la API agrupadas por funcionalidad
+ * 🔀 Rutas agrupadas
  */
-
-// Rutas de autenticación (login, registro, logout, etc.)
 app.use("/api/auth", authRoutes);
-
-// Rutas relacionadas a usuarios (perfil, actualización, etc.)
 app.use("/api/user", userRoutes);
 
 /**
- * ✅ Validación de variables de entorno requeridas
- * Esto asegura que las variables críticas estén definidas antes de ejecutar el servidor
+ * ✅ Verificación de variables .env requeridas
  */
-const requiredEnvVars = ["DATABASE_URL", "JWT_SECRET"];
-requiredEnvVars.forEach((key) => {
+["DATABASE_URL", "JWT_SECRET"].forEach((key) => {
   if (!process.env[key]) {
-    console.error(
-      `❌ Error: Falta la variable de entorno '${key}'. Verifica tu archivo .env.`
-    );
-    process.exit(1); // Detiene la ejecución del servidor si falta una variable obligatoria
+    console.error(`❌ Falta la variable de entorno '${key}'.`);
+    process.exit(1);
   }
 });
 
 /**
- * 🚀 Inicialización del servidor
- * Se conecta a la base de datos antes de comenzar a escuchar peticiones
+ * 🚀 Inicio del servidor tras conexión exitosa a la base de datos
  */
 conectarBaseDeDatos()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`);
+      console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
     });
   })
-  .catch((error) => {
-    console.error("❌ Error al conectar al servidor:");
-    console.error(`  Mensaje: ${error.message}`);
-    process.exit(1); // Finaliza el proceso si hay un error de conexión
+  .catch((err) => {
+    console.error("❌ Error al conectar a la base de datos:", err.message);
+    process.exit(1);
   });

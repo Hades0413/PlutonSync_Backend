@@ -1,7 +1,7 @@
 /**
  * @file userController.js
  * @description Controlador para manejar las operaciones relacionadas con el usuario:
- * registro de nuevo usuario y obtención de datos por email (desde token JWT).
+ * registro de nuevo usuario, obtención por ID (desde JWT o por parámetro) y por email (desde token).
  *
  * @module controllers/userController
  */
@@ -11,7 +11,6 @@ const { createUser, saveUserToDatabase } = require("../supabase");
 
 /**
  * Registra un nuevo usuario.
- * Verifica si el correo ya existe, crea al usuario en Supabase y lo guarda en la BD.
  */
 async function handleRegister(req, res) {
   const { username, nombre_completo, email, password } = req.body;
@@ -62,16 +61,14 @@ async function handleRegister(req, res) {
   }
 }
 
-/**
- * Devuelve datos del usuario autenticado usando su id_usuario (desde JWT).
- */
 async function getUserById(req, res) {
-  const { id_usuario } = req.user; // Usamos el id del usuario desde el token JWT
+  // Usa el ID del parámetro si existe; si no, usa el del JWT
+  const id = req.params.id || req.user.id_usuario;
 
   try {
     const result = await client.query(
       "SELECT id_usuario, username_usuario, nombre_completo_usuario FROM Usuario WHERE id_usuario = $1",
-      [id_usuario]
+      [id]
     );
 
     if (result.rows.length === 0) {
@@ -81,15 +78,7 @@ async function getUserById(req, res) {
     }
 
     const user = result.rows[0];
-
-    res.json({
-      success: true,
-      user: {
-        id_usuario: user.id_usuario,
-        username_usuario: user.username_usuario,
-        nombre_completo_usuario: user.nombre_completo_usuario,
-      },
-    });
+    res.json({ success: true, user });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -117,15 +106,7 @@ async function getUserByEmail(req, res) {
     }
 
     const user = result.rows[0];
-
-    res.json({
-      success: true,
-      user: {
-        id_usuario: user.id_usuario,
-        username_usuario: user.username_usuario,
-        nombre_completo_usuario: user.nombre_completo_usuario,
-      },
-    });
+    res.json({ success: true, user });
   } catch (error) {
     res.status(500).json({
       success: false,
